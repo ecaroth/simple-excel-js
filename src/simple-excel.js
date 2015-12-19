@@ -22,12 +22,12 @@
     };
     
     var DataType = {
-        CURRENCY    : 'CURRENCY',
-        DATETIME    : 'DATETIME',
-        FORMULA     : 'FORMULA',
-        LOGICAL     : 'LOGICAL',
-        NUMBER      : 'NUMBER',
-        TEXT        : 'TEXT'
+        CURRENCY    : 'Currency',
+        DATETIME    : 'Datetime',
+        FORMULA     : 'Formula',
+        LOGICAL     : 'Logical',
+        NUMBER      : 'Number',
+        STRING      : 'String'
     };
 
     var Exception = {    
@@ -46,15 +46,17 @@
         UNKNOWN_ERROR               : 'UNKNOWN_ERROR',
         UNSUPPORTED_BROWSER         : 'UNSUPPORTED_BROWSER'
     };
-    
+
     var Format = {        
-        CSV     : 'CSV',
-        TSV     : 'TSV',
-        XLSX    : 'XLSX',
-        XLS     : 'XLS',
-        XML     : 'XML'
+        CSV     : 'csv',
+        HTML    : 'html',
+        JSON    : 'json',
+        TSV     : 'tsv',
+        XLS     : 'xls',
+        XLSX    : 'xlsx',
+        XML     : 'xml'
     };
-    
+
     var MIMEType = {
         CSV     : 'text/csv',
         HTML    : 'text/html',
@@ -99,7 +101,7 @@
     var Cell = function ( _value, _dataType) {
         var defaults = {
                 value    : _value || '',
-                dataType : dataType || DataType.TEXT
+                dataType : dataType || DataType.STRING
             },
             value = null,
             dataType = null;
@@ -156,9 +158,11 @@
     };
     Sheet.prototype.removeRecord = function (index) {
         this.records.splice(index - 1, 1);
+        return this;
     };
     Sheet.prototype.setRecords = function (records) {
         this.records = records;
+        return this;
     };
     
     /////////////
@@ -217,6 +221,32 @@
         this._delimiter = separator;
         return this;
     };
+    
+    // HTML
+    var HTMLParser = function () {};
+    HTMLParser.prototype = new BaseParser();
+    HTMLParser.prototype._filetype = Format.HTML;
+    HTMLParser.prototype.loadString = function (str, sheetnum) {
+        var self = this;
+        var sheetnum = sheetnum || 0;
+        var domParser = new DOMParser();
+        var domTree = domParser.parseFromString(str, MIMEType.HTML);
+        var sheets = domTree.getElementsByTagName('table');
+        [].forEach.call(sheets, function (el, i) {
+            self._sheet[sheetnum] = new Sheet();
+            var rows = el.getElementsByTagName('tr');
+            [].forEach.call(rows, function (el, i) {
+                var cells = el.getElementsByTagName('td');
+                var row = [];
+                [].forEach.call(cells, function (el, i) {
+                    row.push(new Cell(el.innerHTML));
+                });
+                self._sheet[sheetnum].insertRecord(row);
+            });
+            sheetnum++;
+        });
+        return self;
+    };
 
     // TSV
     var TSVParser = function () {};
@@ -253,6 +283,7 @@
     // Export var
     var Parser = {
         CSV : CSVParser,
+        HTML: HTMLParser,
         TSV : TSVParser,
         XML : XMLParser
     };
@@ -285,9 +316,11 @@
                 sheet.setRecords(data);
                 this._sheet.push(sheet);
             }
+            return this;
         },
         removeSheet : function (index) {
             this._sheet.splice(index - 1, 1);
+            return this;
         },
         saveFile    : function () {
             // TODO: find a reliable way to save as local file
@@ -298,6 +331,36 @@
             return 'data:' + this._mimetype + ';base64,' + b64_content;
         }
     };
+
+    // CSV
+    var CSVWriter = function () {};
+    CSVWriter.prototype = new BaseWriter();
+    CSVWriter.prototype._delimiter = Char.COMMA;
+    CSVWriter.prototype._filetype = Format.CSV;
+    CSVWriter.prototype._mimetype = MIMEType.CSV;
+    CSVWriter.prototype.getString = function () {
+        // TODO: implement real CSV writer
+        var self = this;
+        var string = '';
+        this.getSheet(1).forEach(function (el, i) {
+            el.forEach(function (el) {
+                string += el + self._delimiter;
+            });
+            string += '\r\n';
+        });
+        return string;
+    };
+    CSVWriter.prototype.setDelimiter = function (separator) {
+        this._delimiter = separator;
+        return this;
+    };
+
+    // TSV
+    var TSVWriter = function () {};
+    TSVWriter.prototype = new CSVWriter();
+    TSVWriter.prototype._delimiter = Char.TAB;
+    TSVWriter.prototype._filetype = Format.TSV;
+    TSVWriter.prototype._mimetype = MIMEType.TSV;
 
     // XLS
     var XLSWriter = function () {};
@@ -343,36 +406,6 @@
         return string;
 
     };
-
-    // CSV
-    var CSVWriter = function () {};
-    CSVWriter.prototype = new BaseWriter();
-    CSVWriter.prototype._delimiter = Char.COMMA;
-    CSVWriter.prototype._filetype = Format.CSV;
-    CSVWriter.prototype._mimetype = MIMEType.CSV;
-    CSVWriter.prototype.getString = function () {
-        // TODO: implement real CSV writer
-        var self = this;
-        var string = '';
-        this.getSheet(1).forEach(function (el, i) {
-            el.forEach(function (el) {
-                string += el + self._delimiter;
-            });
-            string += '\r\n';
-        });
-        return string;
-    };
-    CSVWriter.prototype.setDelimiter = function (separator) {
-        this._delimiter = separator;
-        return this;
-    };
-
-    // TSV 
-    var TSVWriter = function () {};
-    TSVWriter.prototype = new CSVWriter();
-    TSVWriter.prototype._delimiter = Char.TAB;
-    TSVWriter.prototype._filetype = Format.TSV;
-    TSVWriter.prototype._mimetype = MIMEType.TSV;
     
     // Export var
     var Writer = {

@@ -46,17 +46,15 @@
         UNKNOWN_ERROR               : 'UNKNOWN_ERROR',
         UNSUPPORTED_BROWSER         : 'UNSUPPORTED_BROWSER'
     };
-
+    
     var Format = {        
-        CSV     : 'csv',
-        HTML    : 'html',
-        JSON    : 'json',
-        TSV     : 'tsv',
-        XLS     : 'xls',
-        XLSX    : 'xlsx',
-        XML     : 'xml'
+        CSV     : 'CSV',
+        TSV     : 'TSV',
+        XLSX    : 'XLSX',
+        XLS     : 'XLS',
+        XML     : 'XML'
     };
-
+    
     var MIMEType = {
         CSV     : 'text/csv',
         HTML    : 'text/html',
@@ -98,18 +96,25 @@
     // Spreadsheet Constructors
     ////////////////////////////
 
-    var Cell = function (value, dataType) {
+    var Cell = function ( _value, _dataType) {
         var defaults = {
-            value    : value || '',
-            dataType : dataType || DataType.TEXT
-        };
-        if (typeof value == typeof {}) {
-            defaults = Utils.overrideProperties(defaults, value);
+                value    : _value || '',
+                dataType : dataType || DataType.TEXT
+            },
+            value = null,
+            dataType = null;
+        if (_value && typeof _value == typeof {}) {
+            defaults = Utils.overrideProperties(defaults, _value);
         }
-        this.value = defaults.value;
-        this.dataType = defaults.dataType;
-        this.toString = function () {
-            return value.toString();
+        value = defaults.value;
+        dataType = defaults.dataType;
+        return {
+            toString: function () {
+                return value.toString();
+            },
+            getDataType: function(){
+                return dataType;
+            }
         }
     };
         
@@ -129,8 +134,12 @@
         return this[rowNum - 1];
     };
     
-    var Sheet = function () {
+    var Sheet = function ( name ) {
+        this.name = name;
         this.records = new Records();
+    };
+    Sheet.prototype.getName = function(){
+        return this.name;
     };
     Sheet.prototype.getCell = function (colNum, rowNum) {
         return this.records.getCell(colNum, rowNum);
@@ -147,11 +156,9 @@
     };
     Sheet.prototype.removeRecord = function (index) {
         this.records.splice(index - 1, 1);
-        return this;
     };
     Sheet.prototype.setRecords = function (records) {
         this.records = records;
-        return this;
     };
     
     /////////////
@@ -210,32 +217,6 @@
         this._delimiter = separator;
         return this;
     };
-    
-    // HTML
-    var HTMLParser = function () {};
-    HTMLParser.prototype = new BaseParser();
-    HTMLParser.prototype._filetype = Format.HTML;
-    HTMLParser.prototype.loadString = function (str, sheetnum) {
-        var self = this;
-        var sheetnum = sheetnum || 0;
-        var domParser = new DOMParser();
-        var domTree = domParser.parseFromString(str, MIMEType.HTML);
-        var sheets = domTree.getElementsByTagName('table');
-        [].forEach.call(sheets, function (el, i) {
-            self._sheet[sheetnum] = new Sheet();
-            var rows = el.getElementsByTagName('tr');
-            [].forEach.call(rows, function (el, i) {
-                var cells = el.getElementsByTagName('td');
-                var row = [];
-                [].forEach.call(cells, function (el, i) {
-                    row.push(new Cell(el.innerHTML));
-                });
-                self._sheet[sheetnum].insertRecord(row);
-            });
-            sheetnum++;
-        });
-        return self;
-    };
 
     // TSV
     var TSVParser = function () {};
@@ -272,7 +253,6 @@
     // Export var
     var Parser = {
         CSV : CSVParser,
-        HTML: HTMLParser,
         TSV : TSVParser,
         XML : XMLParser
     };
@@ -291,6 +271,9 @@
             var number = number || 1;
             return this._sheet[number - 1].records;
         },
+        numSheets   : function(){
+            return this._sheet.length;
+        },
         getString   : function () {
             throw Exception.UNIMPLEMENTED_METHOD;
         },
@@ -302,17 +285,63 @@
                 sheet.setRecords(data);
                 this._sheet.push(sheet);
             }
-            return this;
         },
         removeSheet : function (index) {
             this._sheet.splice(index - 1, 1);
-            return this;
         },
         saveFile    : function () {
             // TODO: find a reliable way to save as local file
-            window.open('data:' + this._mimetype + ';base64,' + window.btoa(this.getString()));            
-            return this;
+            window.open(this.getFileData());
+        },
+        getFileData: function(){
+            var b64_content = window.btoa(unescape(encodeURIComponent(this.getString())));
+            return 'data:' + this._mimetype + ';base64,' + b64_content;
         }
+    };
+
+    // XLS
+    var XLSWriter = function () {};
+    XLSWriter.prototype = new BaseWriter();
+    XLSWriter.prototype._filetype = Format.XLS;
+    XLSWriter.prototype._mimetype = MIMEType.XLS;
+    XLSWriter.prototype.getString = function () {
+        //write xlsx info
+        var self = this,
+            string = '',
+            lb = "\n";
+
+        string += '<?xml version="1.0"?>'+lb;
+        string += '<?mso-application progid="Excel.Sheet"?>'+lb;
+        string += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet" xmlns:html="http://www.w3.org/TR/REC-html40">'+lb;
+        string += '<DocumentProperties xmlns="urn:schemas-microsoft-com:office:office">'+lb;
+        string += '<Author>WebClipDrop</Author>'+lb;
+        string += '<Created>'+new Date().toISOString()+'</Created>'+lb;
+        string += '</DocumentProperties>'+lb;
+        string += '<ExcelWorkbook xmlns="urn:schemas-microsoft-com:office:excel"></ExcelWorkbook>'+lb;
+
+        for(var i=0; i< this.numSheets(); i++){
+            var sheet = this._sheet[i],
+                recs = sheet.records;
+            string += '<Worksheet ss:Name="'+sheet.getName()+'">'+lb;
+            string += '<Table>'+lb;
+            recs.forEach( function (row, row_ind) {
+                string += '<Row>'+lb;
+                row.forEach( function( cell, col_ind){
+                    console.log(cell);
+                    string += '<Cell>'+lb;
+                    string += '<Data ss:Type="'+cell.getDataType()+'">'+cell.toString()+'</Data>';
+                    string += '</Cell>'+lb;
+                });
+                string += '</Row>'+lb;
+            });
+            string += '</Table>'+lb;
+            string += '</Worksheet>'+lb;
+        }
+
+        string += '</Workbook>';
+
+        return string;
+
     };
 
     // CSV
@@ -338,7 +367,7 @@
         return this;
     };
 
-    // TSV
+    // TSV 
     var TSVWriter = function () {};
     TSVWriter.prototype = new CSVWriter();
     TSVWriter.prototype._delimiter = Char.TAB;
@@ -348,7 +377,8 @@
     // Export var
     var Writer = {
         CSV : CSVWriter,
-        TSV : TSVWriter
+        TSV : TSVWriter,
+        XLS : XLSWriter
     };
 
     /////////////

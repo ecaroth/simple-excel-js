@@ -390,7 +390,6 @@
             recs.forEach( function (row, row_ind) {
                 string += '<Row>'+lb;
                 row.forEach( function( cell, col_ind){
-                    console.log(cell);
                     string += '<Cell>'+lb;
                     string += '<Data ss:Type="'+cell.getDataType()+'">'+cell.toString()+'</Data>';
                     string += '</Cell>'+lb;

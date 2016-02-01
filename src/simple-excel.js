@@ -329,6 +329,9 @@
         getFileData: function(){
             var b64_content = window.btoa(unescape(encodeURIComponent(this.getString())));
             return 'data:' + this._mimetype + ';base64,' + b64_content;
+        },
+        clearSheets: function(){
+            this._sheets = [];
         }
     };
 

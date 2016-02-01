@@ -331,7 +331,7 @@
             return 'data:' + this._mimetype + ';base64,' + b64_content;
         },
         clearSheets: function(){
-            this._sheets = [];
+            this._sheet = [];
         }
     };
 
